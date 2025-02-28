@@ -1,0 +1,419 @@
+<?php
+
+namespace App\Models;
+
+use Exception;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+class BaseModel extends Model
+{
+    /**
+     * this variable used in storeing key, value by getList function
+     */
+    protected static $model_cache_key = null;
+
+    /**
+     * name of table fields which uniquly identify the record
+     */
+    protected static array $unique_fields = [];
+
+    /**
+     * set extra relationship array to overcome problem of accidential delete
+     * this variable used in Controller.php -> delete()
+     */
+    public array $child_model_class = [];
+
+    protected $guarded = ["id"];
+
+    private static $tableInfo = [];
+
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+
+        static::$model_cache_key = CACHE_PREFIX . "-" . str_class_name_without_namespace(static::class);
+    }
+
+    public static function classDisplayName() : string
+    {
+        $class_name = str_class_name_to_human_text(static::class);
+        
+        return $class_name;
+    }
+
+    public static function boot()
+    {
+        parent::boot();
+
+        self::creating(function ($model) {
+
+            if (static::tableHaveField($model->getTable(), 'created_by')) {
+                $auth_user = Auth::user();
+                if ($auth_user) {
+                    $model->created_by = $auth_user->id;
+                }
+            }
+        });
+
+        self::created(function ($model) {
+            static::forgotCache();
+        });
+
+        self::updating(function ($model) {
+
+            if (static::tableHaveField($model->getTable(), 'updated_by')) {
+                $auth_user = Auth::user();
+                if ($auth_user) {
+                    $model->updated_by = $auth_user->id;                    
+                }
+            }
+        });
+
+        self::updated(function ($model) {
+            static::forgotCache();
+            
+        });
+
+        self::deleting(function ($model) {
+
+        });
+
+        self::deleted(function ($model) {
+            static::forgotCache();            
+        });
+    }
+
+    public static function getTableInfo($table_name)
+    {
+        if (!isset(static::$tableInfo[$table_name])) {
+            static::setTableInfo($table_name);
+        }
+
+        return static::$tableInfo[$table_name];
+    }
+
+    public static function setTableInfo($table_name)
+    {
+        $cache_key = CACHE_PREFIX . "-table-info-" . $table_name;
+
+        $table_info = Cache::get($cache_key);
+
+        if (!$table_info) {
+            $table_info = [
+                "columns" => []
+            ];
+
+            $columns = DB::select('SHOW COLUMNS FROM ' . $table_name);
+
+            foreach ($columns as $column) {
+                $table_info['columns'][$column->Field] = (array) $column;                
+            }
+
+            Cache::put($cache_key, $table_info);
+        }
+
+        static::$tableInfo[$table_name] = $table_info;
+    }
+
+    public static function tableHaveField($table_name, $field)
+    {
+        $info = static::getTableInfo($table_name);
+
+        if (isset($info['columns'][$field]))
+        {
+            return true;
+        }
+
+        return false;
+    }
+    
+    public static function addCache($cache_key, $data)
+    {
+        Cache::put($cache_key, $data, CACHE_MODEL_TIME);
+
+        $list_of_cache_keys = [];
+        if (Cache::has(static::$model_cache_key))
+        {
+            $list_of_cache_keys = Cache::get(static::$model_cache_key);
+        }
+
+        if (!in_array($cache_key, $list_of_cache_keys))
+        {
+            $list_of_cache_keys[] = $cache_key;
+        }
+
+        Cache::put(static::$model_cache_key, $list_of_cache_keys, CACHE_MODEL_TIME);
+    }
+
+    public static function forgotCache()
+    {
+        if (static::$model_cache_key && Cache::has(static::$model_cache_key))
+        {
+            $list_of_cache_keys = Cache::get(static::$model_cache_key);
+
+            foreach($list_of_cache_keys as $cache_key)
+            {
+                Cache::forget($cache_key);
+            }
+
+            Cache::forget(static::$model_cache_key);
+        }
+    }
+
+    public static function parseValueBeforeUseInDBQuery($field, $value)
+    {
+        return $value;
+    }
+
+    public static function fetchList(Builder $builder, String $key_field, String $value_field, String $table_name)
+    {    
+        if (self::tableHaveField($table_name, $key_field) && self::tableHaveField($table_name, $value_field))   
+        {
+            return $builder->pluck($value_field, $key_field)->toArray();
+        }
+
+        $records = $builder->get();
+
+        $list = [];
+
+        foreach($records as $record)
+        {
+            $list[$record->{$key_field}] = $record->{$value_field};
+        }
+
+        return $list;
+    }
+
+    public static function getList(String $key_field = "id", String $value_field = "display_name", $conditions = [], $order_by = "name", $order_dir = "asc")
+    {
+        $builder = static::query();
+
+        $model = new static();
+        $table_name = $model->getTable();
+
+        $builder->orWhere(function ($query) use ($conditions) {
+            if (isset($conditions['or_id']))
+            {
+                $v = $conditions['or_id'];
+
+                if (is_array($v))
+                {
+                    if (!empty($v))
+                    {
+                        $query->whereIn("id", $v);
+                    }
+                }
+                else
+                {
+                    $query->where("id", $v);
+                }
+            }
+        });
+
+        unset($conditions['or_id']);
+
+        if (static::tableHaveField($table_name, 'is_active'))
+        {
+            if (!isset($conditions['is_active']))
+            {
+                $conditions['is_active'] = 1;
+            }
+        }
+
+        $builder->orWhere(function ($query) use ($conditions) {
+            foreach($conditions as $k => $v)
+            {
+                if (is_array($v))
+                {
+                    if (!empty($v))
+                    {
+                        $query->whereIn($k, $v);
+                    }
+                }
+                else
+                {
+                    $query->where($k, $v);
+                }
+            }            
+        });
+
+        if ($order_by && $order_dir) {
+            $builder->orderBy($order_by, $order_dir);
+        }
+
+        $list = static::fetchList($builder, $key_field, $value_field, $table_name);
+
+        return $list;
+    }
+
+    public static function getListCache(String $key_field = "id", String $value_field = "display_name", $order_by = "name", $order_dir = "ASC")
+    {
+        if (!static::$model_cache_key)
+        {
+            throw_exception("model_cache_key is not set in Model");
+        }
+
+        $cache_key = static::$model_cache_key . "-" . $key_field . "-" . $value_field;
+        //d($cache_key);
+
+        if (Cache::has($cache_key))
+        {
+            return Cache::get($cache_key);
+        }
+
+        $builder = static::query();
+
+        $model = new static();
+        $table_name = $model->getTable();
+
+        if ($order_by && $order_dir)
+        {
+            $builder->orderBy($order_by, $order_dir);
+        }
+
+        $list = static::fetchList($builder, $key_field, $value_field, $table_name);
+
+        self::addCache($cache_key, $list);
+
+        return $list;
+    }
+
+    /*------------------------------------------------------------------*/
+    /**------------------------Member Functions ----------------------- */
+    /*------------------------------------------------------------------*/
+
+    public function hasAttribute($key)
+    {
+        return array_key_exists($key, $this->attributes);
+    }
+
+    public function getClassDisplayName()
+    {
+        $class_name = static::classDisplayName();
+        
+        return $class_name;
+    }
+
+    public function getDisplayName()
+    {
+        if (!$this->hasAttribute("name"))
+        {
+            throw_exception("Record of has no attribute : name");
+        }
+        
+        return $this->name;
+    }
+
+    public function getFilePath()
+    {
+        return "files/" . str_class_name_without_namespace(get_class($this)) . "/";
+    }
+
+    public function getFilePathForRecord()
+    {
+        return $this->getFilePath() . $this->id . "/";
+    }
+
+    public function getNextId()
+    {
+        $table = $this->getTable();
+        $statement = DB::select("SHOW TABLE STATUS LIKE '" . $table . "'");
+        $nextId = $statement[0]->Auto_increment;
+
+        return $nextId;
+    }
+
+    public function insertOrUpdate(array $data, &$is_insert = null, &$is_update = null)
+    {
+        $model = $this->getUniqueId($data);
+
+        if ($model) {
+            $model->fill($data);
+            if ($model->isDirty())
+            {
+                if ( $model->save() )
+                {
+                    $is_update = true;
+                }
+                else
+                {
+                    $is_update = false;
+                    throw new \Exception("Fail To Save");
+                }
+            }
+        } else {
+            $model = static::create($data);
+
+            if ($model)
+            {
+                $is_insert = true;
+            }
+            else
+            {
+                $is_insert = false;
+                return null;
+            }
+        }
+
+        return $model->id;
+    }
+
+    public function insertIgnoreIfExist(array $data)
+    {
+        $record = $this->getUniqueId($data);
+
+        if (!$record) {
+            $record = static::create($data);
+        }
+
+        return $record->id;
+    }
+
+    public function getUniqueId(array $data)
+    {
+        if (!static::$unique_fields) {
+            throw_exception("unique_fields is not set yet");
+        }
+
+        $conditions = [];
+        foreach (static::$unique_fields as $unique_field) {
+            if (!isset($data[$unique_field])) {
+                throw_exception("field $unique_field missing in argument array");
+            }
+
+            $conditions[] = [$unique_field, '=', self::parseValueBeforeUseInDBQuery($unique_field, $data[$unique_field])];
+        }
+
+        $count = static::where($conditions)->count();
+
+        if ($count == 0) {
+            return false;
+        }
+
+        if ($count > 1) {
+            throw_exception("more than 1 records found");
+        }
+
+        $record = static::where($conditions)->first(["id"]);
+
+        return $record;
+    }
+
+    public function activate()
+    {
+        $this->is_active = 1;
+        $this->save();
+    }
+
+    public function deActivate()
+    {
+        $this->is_active = 0;
+        $this->save();
+    }
+}
