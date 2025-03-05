@@ -157,7 +157,7 @@ class WebController extends Controller
     protected function getRequestData($cache_prefix, array $array, bool $is_cache_clear = false)
     {
         if ($cache_prefix) {
-            $cache_key = CACHE_PREFIX . "-request_" . str_replace(".", "_", $cache_prefix) . "_" . auth()->id();
+            $cache_key = "request_" . str_replace(".", "_", $cache_prefix) . "_" . auth()->id();
 
             if (Cache::has($cache_key)) {
                 $cache_params = Cache::get($cache_key);
@@ -192,7 +192,7 @@ class WebController extends Controller
             if ($is_cache_clear) {
                 Cache::forget($cache_key);
             } else {
-                if (!Cache::put($cache_key, $params, CACHE_SEARCH_CONDITIONS_TIME)) {
+                if (!Cache::put($cache_key, $params, laravel_constant("cache_time.summary_search"))) {
                     throw_exception("Fail to put cache");
                 }
             }
@@ -207,7 +207,7 @@ class WebController extends Controller
         $search_variables = [];
 
         if ($cache_prefix) {
-            $cache_key = CACHE_PREFIX . "-search_" . str_replace(".", "_", $cache_prefix) . "_" . auth()->id();
+            $cache_key = "search_" . str_replace(".", "_", $cache_prefix) . "_" . auth()->id();
         }
 
         $request_params = request()->all();
@@ -293,7 +293,7 @@ class WebController extends Controller
         }
 
         if (isset($cache_key)) {
-            if (!Cache::put($cache_key, $search_variables, CACHE_SEARCH_CONDITIONS_TIME)) {
+            if (!Cache::put($cache_key, $search_variables, laravel_constant("cache_time.summary_search"))) {
                 throw_exception("Fail to put cache");
             }
         }

@@ -14,11 +14,6 @@ use Illuminate\Support\Facades\Schema;
 class BaseModel extends Model
 {
     /**
-     * this variable used in storeing key, value by getList function
-     */
-    protected static $model_cache_key = null;
-
-    /**
      * name of table fields which uniquly identify the record
      */
     protected static array $unique_fields = [];
@@ -32,13 +27,6 @@ class BaseModel extends Model
     protected $guarded = ["id"];
 
     private static $tableInfo = [];
-
-    public function __construct(array $attributes = [])
-    {
-        parent::__construct($attributes);
-
-        static::$model_cache_key = CACHE_PREFIX . "-" . str_class_name_without_namespace(static::class);
-    }
 
     public static function classDisplayName() : string
     {
@@ -100,7 +88,7 @@ class BaseModel extends Model
 
     public static function setTableInfo($table_name)
     {
-        $cache_key = CACHE_PREFIX . "-table-info-" . $table_name;
+        $cache_key = "table-info-" . $table_name;
 
         $table_info = Cache::get($cache_key);
 
@@ -123,24 +111,64 @@ class BaseModel extends Model
 
     public static function tableHaveField($table_name, $field)
     {
-        $info = static::getTableInfo($table_name);
-
-        if (isset($info['columns'][$field]))
-        {
-            return true;
+        if (!isset(static::$tableInfo[$table_name])) {
+            static::setTableInfo($table_name);
         }
 
-        return false;
+        $info = static::$tableInfo[$table_name];
+
+        if (isset($info->{$field}))
+        {
+            return $info->{$field};
+        }
+
+        throw new Exception("$field not found in TableInfo Class");
     }
     
-    public static function addCache($cache_key, $data)
+    public static function getModelCacheKey() : string
     {
-        Cache::put($cache_key, $data, CACHE_MODEL_TIME);
+        $str = get_called_class();
+        $arr = explode("\\", $str);
+        $str = end($arr);
+        $str = trim(preg_replace('/(?<!\ )[A-Z]/', ' $0', $str));
 
-        $list_of_cache_keys = [];
-        if (Cache::has(static::$model_cache_key))
+        $key = $str;
+
+        $key = str_replace(".", "-", $key);
+
+        $key = preg_replace('!\s+!', '-', $key);
+
+        return $key;
+    }
+
+    public static function getCache($key)
+    {
+        $model_cache_key = static::getModelCacheKey();
+
+        $cache_key = $model_cache_key . "-" . $key;
+
+        if (Cache::has($cache_key))
         {
-            $list_of_cache_keys = Cache::get(static::$model_cache_key);
+            return Cache::get($cache_key);
+        }
+
+        return null;
+    }
+
+    public static function addCache($key, $data)
+    {
+        $model_cache_key = static::getModelCacheKey();
+
+        $cache_key = $model_cache_key . "-" . $key;
+
+        //put cache
+        Cache::put($cache_key, $data, laravel_constant("cache_time.model"));
+
+        //make refrence to cache keys 
+        $list_of_cache_keys = [];
+        if (Cache::has($model_cache_key))
+        {
+            $list_of_cache_keys = Cache::get($list_of_cache_keys);
         }
 
         if (!in_array($cache_key, $list_of_cache_keys))
@@ -148,21 +176,26 @@ class BaseModel extends Model
             $list_of_cache_keys[] = $cache_key;
         }
 
-        Cache::put(static::$model_cache_key, $list_of_cache_keys, CACHE_MODEL_TIME);
+        if (!Cache::put($model_cache_key, $list_of_cache_keys, laravel_constant("cache_time.model")))
+        {
+            throw_exception("Fail To Put Cache");
+        }
     }
 
-    public static function forgotCache()
+    protected function forgotCache()
     {
-        if (static::$model_cache_key && Cache::has(static::$model_cache_key))
+        $model_cache_key = static::getModelCacheKey();
+        
+        if (Cache::has($model_cache_key))
         {
-            $list_of_cache_keys = Cache::get(static::$model_cache_key);
+            $list_of_cache_keys = Cache::get($model_cache_key);
 
             foreach($list_of_cache_keys as $cache_key)
             {
                 Cache::forget($cache_key);
             }
 
-            Cache::forget(static::$model_cache_key);
+            Cache::forget($model_cache_key);
         }
     }
 
@@ -252,34 +285,30 @@ class BaseModel extends Model
         return $list;
     }
 
-    public static function getListCache(String $key_field = "id", String $value_field = "display_name", $order_by = "name", $order_dir = "ASC")
+    public static function getListCache(String $id = "id", String $value = "display_name", $order_by = "name", $order_dir = "ASC")
     {
-        if (!static::$model_cache_key)
-        {
-            throw_exception("model_cache_key is not set in Model");
-        }
+        $key = "list-" . $id . "-" . $value;
 
-        $cache_key = static::$model_cache_key . "-" . $key_field . "-" . $value_field;
-        //d($cache_key);
+        $list = static::getCache($key);
 
-        if (Cache::has($cache_key))
+        if ($list)
         {
-            return Cache::get($cache_key);
+            return $list;
         }
 
         $builder = static::query();
-
-        $model = new static();
-        $table_name = $model->getTable();
 
         if ($order_by && $order_dir)
         {
             $builder->orderBy($order_by, $order_dir);
         }
 
-        $list = static::fetchList($builder, $key_field, $value_field, $table_name);
+        $model = new static();
+        $table_name = $model->getTable();
 
-        self::addCache($cache_key, $list);
+        $list = static::fetchList($builder, $id, $value, $table_name);
+
+        self::addCache($key, $list);
 
         return $list;
     }

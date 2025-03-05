@@ -11,8 +11,6 @@ class Menu
     private static $menus = [];
     private static $current_route_name = "";
 
-    const CACHE_TIME = CACHE_MENU_TIME;
-
     public static function setCurrentRouteName(String $current_route_name)
     {
         self::$current_route_name = strtolower(trim($current_route_name));
@@ -48,7 +46,7 @@ class Menu
         if (isset($cache_key)) {
             self::_filterMenuForUser();
 
-            Cache::put($cache_key, self::$menus, self::CACHE_TIME);
+            Cache::put($cache_key, self::$menus, laravel_constant("cache_time.menu"));
         }
 
         return self::checkForActive(self::$menus);;

@@ -20,4 +20,10 @@ return [
         1 => "Success",
         0 => "Fail",
     ],
+
+    "cache_time" => [
+        "menu" => 60 * 24 * 365,
+        "model" => 60 * 24,
+        "summary_search" => 60 * 24 * 30
+    ],
 ];

@@ -126,7 +126,7 @@ class User extends Authenticatable
 
     public static function addCache($cache_key, $data)
     {
-        Cache::put($cache_key, $data, CACHE_MODEL_TIME);
+        Cache::put($cache_key, $data, laravel_constant("cache_time.model"));
 
         $list_of_cache_keys = [];
         if (Cache::has(static::$model_cache_key))
@@ -139,7 +139,7 @@ class User extends Authenticatable
             $list_of_cache_keys[] = $cache_key;
         }
 
-        Cache::put(static::$model_cache_key, $list_of_cache_keys, CACHE_MODEL_TIME);
+        Cache::put(static::$model_cache_key, $list_of_cache_keys, laravel_constant("cache_time.model"));
     }
 
     public static function forgotCache()
