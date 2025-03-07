@@ -243,7 +243,13 @@ class FileUtility
 
         if ($prepend_domain && $path)
         {
-            $base = trim(config("app.url"));
+            $base = $_SERVER['APP_URL'];
+
+            if (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'])
+            {
+                $base .= ":" . $_SERVER['SERVER_PORT'];
+            }
+
             $base = str_replace("\\", "/", $base);
             $base = trim($base, "/");
 

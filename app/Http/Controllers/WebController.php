@@ -157,7 +157,15 @@ class WebController extends Controller
     protected function getRequestData($cache_prefix, array $array, bool $is_cache_clear = false)
     {
         if ($cache_prefix) {
-            $cache_key = "request_" . str_replace(".", "_", $cache_prefix) . "_" . auth()->id();
+            $cache_key = get_cache_prefix() . "-request_" . $cache_prefix . "_" . auth()->id();
+
+            $cache_key = str_replace(".", "-", $cache_key);
+
+            $cache_key = preg_replace('!\s+!', '-', $cache_key);
+
+            $cache_key = trim($cache_key, "-");
+            
+            $cache_key = trim($cache_key);
 
             if (Cache::has($cache_key)) {
                 $cache_params = Cache::get($cache_key);
@@ -207,7 +215,15 @@ class WebController extends Controller
         $search_variables = [];
 
         if ($cache_prefix) {
-            $cache_key = "search_" . str_replace(".", "_", $cache_prefix) . "_" . auth()->id();
+            $cache_key = get_cache_prefix() . "-search_" . $cache_prefix . "_" . auth()->id();
+
+            $cache_key = str_replace(".", "-", $cache_key);
+
+            $cache_key = preg_replace('!\s+!', '-', $cache_key);
+
+            $cache_key = trim($cache_key, "-");
+            
+            $cache_key = trim($cache_key);
         }
 
         $request_params = request()->all();
@@ -393,7 +409,15 @@ class WebController extends Controller
 
     protected function getPaginagteRecords(Builder $builder, $cache_key_prefix)
     {
-        $cache_key = $cache_key_prefix . "-pagination_limit";
+        $cache_key = get_cache_prefix() . "-pagination_limit-" . $cache_key_prefix . "_" . auth()->id();
+
+        $cache_key = str_replace(".", "-", $cache_key);
+
+        $cache_key = preg_replace('!\s+!', '-', $cache_key);
+
+        $cache_key = trim($cache_key, "-");
+        
+        $cache_key = trim($cache_key);
 
         $params = $this->getRequestData($cache_key, [
             ["key" => "pagination_limit", "default" => $this->paginationLimit],

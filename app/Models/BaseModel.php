@@ -117,12 +117,12 @@ class BaseModel extends Model
 
         $info = static::$tableInfo[$table_name];
 
-        if (isset($info->{$field}))
+        if (isset($info["columns"][$field]))
         {
-            return $info->{$field};
+            return $info["columns"][$field];
         }
 
-        throw new Exception("$field not found in TableInfo Class");
+        return false;
     }
     
     public static function getModelCacheKey() : string
@@ -132,11 +132,15 @@ class BaseModel extends Model
         $str = end($arr);
         $str = trim(preg_replace('/(?<!\ )[A-Z]/', ' $0', $str));
 
-        $key = $str;
+        $key = get_cache_prefix() . "-" . $str;
 
         $key = str_replace(".", "-", $key);
 
         $key = preg_replace('!\s+!', '-', $key);
+
+        $key = trim($key, "-");
+        
+        $key = trim($key);
 
         return $key;
     }
@@ -146,6 +150,8 @@ class BaseModel extends Model
         $model_cache_key = static::getModelCacheKey();
 
         $cache_key = $model_cache_key . "-" . $key;
+
+        dd($cache_key);
 
         if (Cache::has($cache_key))
         {

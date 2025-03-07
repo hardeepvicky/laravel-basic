@@ -33,6 +33,8 @@ class UserController extends BackendController
 
         $records = $this->getPaginagteRecords($builder, $cache_key_prefix);
 
+        $role_list = Role::getListCache();
+
         $this->setForView(compact("records"));
 
         return $this->viewIndex(__FUNCTION__);

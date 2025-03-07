@@ -436,3 +436,9 @@ function array_make_empty_string_if_keys_not_found(array $arr, array $keys)
 
     return $arr;
 }
+
+
+function get_cache_prefix()
+{
+    return "";
+}
