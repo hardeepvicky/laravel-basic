@@ -134,6 +134,11 @@ class BaseModel extends Model
 
         $key = get_cache_prefix() . "-" . $str;
 
+        return  static::optimizeCacheKey($key);
+    }
+
+    public static function optimizeCacheKey($key) : string
+    {
         $key = str_replace(".", "-", $key);
 
         $key = preg_replace('!\s+!', '-', $key);
@@ -151,8 +156,6 @@ class BaseModel extends Model
 
         $cache_key = $model_cache_key . "-" . $key;
 
-        dd($cache_key);
-
         if (Cache::has($cache_key))
         {
             return Cache::get($cache_key);
@@ -165,7 +168,7 @@ class BaseModel extends Model
     {
         $model_cache_key = static::getModelCacheKey();
 
-        $cache_key = $model_cache_key . "-" . $key;
+        $cache_key = $model_cache_key . "-" . static::optimizeCacheKey($key);
 
         //put cache
         Cache::put($cache_key, $data, laravel_constant("cache_time.model"));

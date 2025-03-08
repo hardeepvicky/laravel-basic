@@ -10,6 +10,7 @@ use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -157,15 +158,7 @@ class WebController extends Controller
     protected function getRequestData($cache_prefix, array $array, bool $is_cache_clear = false)
     {
         if ($cache_prefix) {
-            $cache_key = get_cache_prefix() . "-request_" . $cache_prefix . "_" . auth()->id();
-
-            $cache_key = str_replace(".", "-", $cache_key);
-
-            $cache_key = preg_replace('!\s+!', '-', $cache_key);
-
-            $cache_key = trim($cache_key, "-");
-            
-            $cache_key = trim($cache_key);
+            $cache_key = BaseModel::optimizeCacheKey(get_cache_prefix() . "-request_" . $cache_prefix . "_" . auth()->id());
 
             if (Cache::has($cache_key)) {
                 $cache_params = Cache::get($cache_key);
@@ -215,15 +208,7 @@ class WebController extends Controller
         $search_variables = [];
 
         if ($cache_prefix) {
-            $cache_key = get_cache_prefix() . "-search_" . $cache_prefix . "_" . auth()->id();
-
-            $cache_key = str_replace(".", "-", $cache_key);
-
-            $cache_key = preg_replace('!\s+!', '-', $cache_key);
-
-            $cache_key = trim($cache_key, "-");
-            
-            $cache_key = trim($cache_key);
+            $cache_key = BaseModel::optimizeCacheKey(get_cache_prefix() . "-search_" . $cache_prefix . "_" . auth()->id());
         }
 
         $request_params = request()->all();
@@ -409,15 +394,7 @@ class WebController extends Controller
 
     protected function getPaginagteRecords(Builder $builder, $cache_key_prefix)
     {
-        $cache_key = get_cache_prefix() . "-pagination_limit-" . $cache_key_prefix . "_" . auth()->id();
-
-        $cache_key = str_replace(".", "-", $cache_key);
-
-        $cache_key = preg_replace('!\s+!', '-', $cache_key);
-
-        $cache_key = trim($cache_key, "-");
-        
-        $cache_key = trim($cache_key);
+        $cache_key = BaseModel::optimizeCacheKey( get_cache_prefix() . "-pagination_limit-" . $cache_key_prefix . "_" . auth()->id() );
 
         $params = $this->getRequestData($cache_key, [
             ["key" => "pagination_limit", "default" => $this->paginationLimit],
@@ -462,6 +439,11 @@ class WebController extends Controller
 
     protected function updateUserInfoAfterSave(Model $model)
     {
+        if (App::environment('production'))
+        {
+            return false;
+        }
+
         $auth_user = Auth::user();
         
         if ($auth_user)
@@ -491,6 +473,11 @@ class WebController extends Controller
 
     protected function updateUserInfoForCreateBulk(array $models)
     {
+        if (App::environment('production'))
+        {
+            return false;
+        }
+
         $auth_user = Auth::user();
 
         if ($auth_user) {
@@ -500,6 +487,11 @@ class WebController extends Controller
 
     protected function updateUserInfoForUpdateBulk(array $models)
     {
+        if (App::environment('production'))
+        {
+            return false;
+        }
+
         $auth_user = Auth::user();
 
         if ($auth_user) {
@@ -509,6 +501,11 @@ class WebController extends Controller
 
     protected function updateUserInfoForDeleteBulk(array $models)
     {
+        if (App::environment('production'))
+        {
+            return false;
+        }
+        
         $auth_user = Auth::user();
         // $auth_user = (User) $auth_user;
 
