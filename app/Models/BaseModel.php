@@ -119,7 +119,7 @@ class BaseModel extends Model
 
         if (isset($info["columns"][$field]))
         {
-            return $info["columns"][$field];
+            return true;
         }
 
         return false;

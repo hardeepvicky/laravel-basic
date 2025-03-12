@@ -35,7 +35,7 @@ class UserController extends BackendController
 
         $role_list = Role::getListCache();
 
-        $this->setForView(compact("records"));
+        $this->setForView(compact("records", "role_list"));
 
         return $this->viewIndex(__FUNCTION__);
     }
@@ -50,7 +50,19 @@ class UserController extends BackendController
             ["field" => "is_active", "type" => "", "view_field" => "is_active"],
         ]);
 
-        $builder = $this->modelClass::where($conditions);
+        $role_condition = $this->getConditions($cache_key . ".2", [
+            ["field" => "role_id", "type" => "", "view_field" => "role_id"],
+        ], true);
+
+        $builder = $this->modelClass::where($conditions)->whereHas('userRole', 
+                function ($q) use($role_condition) 
+                {
+                    if (isset($role_condition['role_id']))
+                    {
+                        $q->where("role_id", $role_condition['role_id']);
+                    }
+                }
+        );
 
         if ($apply_sort) {
             $cache_key_for_sort = $cache_key_prefix . "-index-extra-params";
